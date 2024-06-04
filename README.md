@@ -25,7 +25,7 @@ You can also use wildcards:
 steadiercom *.xml -m M9,LB --mediadb media.tsv
 ```
 
-Run for multiple communities specified on a TSV file with format:
+Run for multiple communities specified on a TSV file with format (**without the header**):
 
 col 1 | col 2
 --- | --- 
@@ -47,7 +47,7 @@ You can select a different growth rate:
 steadiercom [models] [args] --growth 0.2
 ```
 
-Run for multiple communities with specified relative abundance:
+Run for multiple communities with specified relative abundance (**without the header**):
 
 
 col 1 | col 2 | col 3
