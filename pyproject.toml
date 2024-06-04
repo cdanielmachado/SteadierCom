@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "SteadierCom"
-version = "0.1.0"
+version = "0.1.1"
 description = "Microbial community simulation."
 readme = "README.rst"
 authors = [
@@ -22,11 +22,12 @@ classifiers = [
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'License :: OSI Approved :: Apache Software License',
 ]
 license = {text = "Apache Software License 2.0"}
 dependencies = [
-  "reframed",
+  "reframed>=1.5.2",
   "pandas",
   "numpy"
 ]
@@ -40,7 +41,7 @@ dev = [
 ]
 
 [project.scripts]
-steadycom = "steadiercom.cli:main"
+steadiercom = "steadiercom.cli:main"
 
 
 [project.urls]
