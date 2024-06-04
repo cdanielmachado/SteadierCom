@@ -69,7 +69,7 @@ def load_media_db(filename, sep='\t', medium_col='medium', compound_col='compoun
     return media_db[compound_col].to_dict()
 
 
-def main(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None):
+def main_run(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None):
 
     abstol = 1e-9
     default_growth = 0.1
@@ -131,7 +131,7 @@ def main(models, communities=None, output=None, media=None, mediadb=None, growth
         print('No feasible solutions found.')
 
 
-if __name__ == '__main__':
+def main():
 
     parser = argparse.ArgumentParser(description="Simulate microbial communities with SteadierCom",
                                      formatter_class=argparse.RawTextHelpFormatter)
@@ -181,7 +181,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-    main(
+    main_run(
         models=args.models,
         communities=args.communities,
         output=args.output,
@@ -192,3 +192,5 @@ if __name__ == '__main__':
     )
 
 
+if __name__ == '__main__':
+    main()

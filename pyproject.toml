@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "steadiercom"
+name = "SteadierCom"
 version = "0.1.0"
-description = "Python Boilerplate contains all the boilerplate you need to create a Python package."
+description = "Microbial community simulation."
 readme = "README.rst"
 authors = [
   {name = "Daniel Machado", email = "cdanielmachado@gmail.com"}
@@ -14,11 +14,21 @@ maintainers = [
   {name = "Daniel Machado", email = "cdanielmachado@gmail.com"}
 ]
 classifiers = [
-
+        'Development Status :: 4 - Beta',
+        'Environment :: Console', 
+        'Intended Audience :: Science/Research',
+        'Topic :: Scientific/Engineering :: Bio-Informatics',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'License :: OSI Approved :: Apache Software License',
 ]
 license = {text = "Apache Software License 2.0"}
 dependencies = [
-  
+  "reframed",
+  "pandas",
+  "numpy"
 ]
 
 [project.optional-dependencies]
@@ -29,10 +39,11 @@ dev = [
     "ruff"  # linting
 ]
 
-[project.urls]
+[project.scripts]
+steadycom = "steadiercom.cli:main"
 
-bugs = "https://github.com/cdanielmachado/steadiercom/issues"
-changelog = "https://github.com/cdanielmachado/steadiercom/blob/master/changelog.md"
+
+[project.urls]
 homepage = "https://github.com/cdanielmachado/steadiercom"
 
 [tool.setuptools]
