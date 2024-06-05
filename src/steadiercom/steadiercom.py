@@ -77,7 +77,7 @@ def build_problem(community, growth=0.1, abundance=None, constraints=None):
                     if abundance is None:
                         solver.add_constraint(f"ub_{new_id}", {f"x_{org_id}": ub, new_id: -1}, '>', 0, update=False)
                     else:
-                        solver.add_constraint(f"lb_{new_id}", {new_id: 1}, '<', ub * abundance[org_id], update=False)
+                        solver.add_constraint(f"ub_{new_id}", {new_id: 1}, '<', ub * abundance[org_id], update=False)
 
     solver.update()
 
