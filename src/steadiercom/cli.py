@@ -11,7 +11,6 @@ import pandas as pd
 from reframed.io.cache import ModelCache
 import os
 from reframed import Environment
-import numpy as np
 
 
 def extract_id_from_filepath(filepath):
@@ -75,8 +74,16 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
     default_growth = 0.1
 
     model_cache, comm_dict, has_abundance = load_communities(models, communities)
-    media = media.split(',')
-    media_db = load_media_db(mediadb)
+
+    if media is None:
+        media = [None]
+    else:
+        media = media.split(',')
+
+        if mediadb is None:
+            raise RuntimeError('Media database file must be provided.')
+        else:   
+            media_db = load_media_db(mediadb)
 
     results = []
     
@@ -96,9 +103,12 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
 
         for medium in media:
 
-            print(f'simulating {comm_id} in {medium}')
-
-            env = Environment.from_compounds(media_db[medium]).apply(community.merged_model, inplace=False, exclusive=True, warning=False)
+            if medium is None:
+                print(f'simulating {comm_id} in complete medium')
+                env = Environment.complete(community.merged_model, inplace=False)
+            else:
+                print(f'simulating {comm_id} in {medium}')
+                env = Environment.from_compounds(media_db[medium]).apply(community.merged_model, inplace=False, exclusive=True, warning=False)
 
             if sample is None:
                 sol = SteadierCom(community, abundance=abundance, growth=growth, allocation=True, constraints=env)
@@ -114,7 +124,7 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
                     df = pd.concat(feasible)
                     df['frequency'] = 1
                     df = df.groupby(['donor', 'receiver', 'compound'], as_index=False).agg(
-                        {'mass_rate': np.mean, 'rate': np.mean, 'frequency': lambda x: sum(x)/sample})
+                        {'mass_rate': lambda x: x.mean(), 'rate': lambda x: x.mean(), 'frequency': lambda x: sum(x)/sample})
                     df['community'] = comm_id
                     df['medium'] = medium
                     results.append(df)
@@ -173,8 +183,8 @@ def main():
     #TODO: make media optional
 
     parser.add_argument('-o', '--output', dest='output', help="Prefix for output file(s).")
-    parser.add_argument('-m', '--media', required=True, dest='media', help="Specify a growth medium.")
-    parser.add_argument('--mediadb', required=True, help="Media database file")
+    parser.add_argument('-m', '--media', dest='media', help="Specify a growth medium.")
+    parser.add_argument('--mediadb', help="Media database file")
     parser.add_argument('--growth', type=float, help="Community growth rate (optional)")
     parser.add_argument('--sample', type=int, help="Run sampling analysis for each simulation with N samples")
 

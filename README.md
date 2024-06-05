@@ -13,19 +13,27 @@ pip install steadiercom
 
 ## Usage
 
-Run for a single community on one (or several) specified growth media
+Run for a single community without specified media (using complete medium by default)
 
 ```
-steadiercom species1.xml species2.xml ... -m M9,LB --mediadb media.tsv
+steadiercom species1.xml species2.xml ... speciesN.xml
 ```
 
 You can also use wildcards: 
 
 ```
-steadiercom *.xml -m M9,LB --mediadb media.tsv
+steadiercom *.xml 
 ```
 
-Run for multiple communities specified on a TSV file with format (**without the header**):
+You can specify your own growth media in a TSV file. 
+
+```
+steadiercom [models] -m M9,LB --mediadb media.tsv
+```
+
+
+
+You can simulate  multiple communities (specified on a TSV file with the following format **without the header**):
 
 col 1 | col 2
 --- | --- 
