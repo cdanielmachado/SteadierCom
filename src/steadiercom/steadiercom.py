@@ -112,7 +112,7 @@ def build_problem(community, growth=0.1, abundance=None, constraints=None):
 
 
 def SteadierCom(community, objective=None, growth=0.1, abundance=None, allocation=False, constraints=None,
-             w_e=0.001, w_r=0.5, solver=None):
+             w_e=0.002, w_r=0.2, solver=None):
 
     if abundance:
         norm = sum(abundance.values())
@@ -122,13 +122,21 @@ def SteadierCom(community, objective=None, growth=0.1, abundance=None, allocatio
         solver = build_problem(community, growth=growth, abundance=abundance, constraints=constraints)
 
     if allocation:
-        _ = allocation_constraints(community, solver, w_e=w_e, w_r=w_r, abundance=abundance)
+        allocation_constraints(community, solver, w_e=w_e, w_r=w_r, abundance=abundance)
 
     minimize = False
 
-    if not objective:
+    if objective:
+        if objective != community.merged_model.biomass_reaction and growth is None:
+            if constraints:
+                if community.merged_model.biomass_reaction not in constraints:
+                    constraints[community.merged_model.biomass_reaction] = (0.1, inf)
+            else:
+                constraints = {community.merged_model.biomass_reaction: (0.1, inf)}
+
+    else:
         if growth is None:
-            objective = community.merged_model.biomass_reaction
+            objective = {community.merged_model.biomass_reaction: 1}
         else:
             objective = {}
             minimize = True
@@ -137,8 +145,11 @@ def SteadierCom(community, objective=None, growth=0.1, abundance=None, allocatio
 
     sol = solver.solve(objective, minimize=minimize, constraints=constraints)
 
+    print(objective)
+    print(sol)
+
     if sol.status == Status.OPTIMAL:
-        if sol.values[community.merged_model.biomass_reaction] > 0:
+        if True or sol.values[community.merged_model.biomass_reaction] > 0:
             sol = CommunitySolution(community, sol.values)
             sol.status = Status.OPTIMAL
         else:
@@ -147,8 +158,8 @@ def SteadierCom(community, objective=None, growth=0.1, abundance=None, allocatio
     return sol
 
 
-def SteadierSample(community, n=100, growth=0.1, abundance=None, allocation=False, constraints=None,
-             w_e=0.001, w_r=0.5, solver=None):
+def SteadierSample(community, objective=None, n=100, growth=0.1, abundance=None, allocation=False, constraints=None,
+             w_e=0.002, w_r=0.2, solver=None):
 
     if abundance:
         norm = sum(abundance.values())
@@ -166,13 +177,16 @@ def SteadierSample(community, n=100, growth=0.1, abundance=None, allocation=Fals
     if abundance:
         w1 = {org_id: 1 / abundance[org_id] if abundance[org_id] > 0 else 0 for org_id in community.organisms}
 
-    if not growth:
+
+    if growth is None and objective is None:
         objective = community.merged_model.biomass_reaction
+
+    if objective is not None:
         sol = solver.solve(objective, minimize=False, constraints=constraints)
         if constraints is None:
-            constraints = {community.merged_model.biomass_reaction: (sol.fobj, inf)} 
+            constraints = {objective: (sol.fobj, inf)} 
         else:
-            constraints[community.merged_model.biomass_reaction] = (sol.fobj, inf)
+            constraints[objective] = (sol.fobj, inf)
 
     for _ in range(n):
 

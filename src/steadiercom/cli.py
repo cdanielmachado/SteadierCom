@@ -29,7 +29,7 @@ def extract_id_from_filepath(filepath):
 def build_cache(models):
     ids = [extract_id_from_filepath(model) for model in models]
 
-    return ModelCache(ids, models)
+    return ModelCache(ids, models, load_args={'flavor': 'bigg'})
 
 
 def load_communities(models, communities):
@@ -68,7 +68,7 @@ def load_media_db(filename, sep='\t', medium_col='medium', compound_col='compoun
     return media_db[compound_col].to_dict()
 
 
-def main_run(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None):
+def main_run(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None, w_e=None, w_r=None, target=None):
 
     abstol = 1e-9
     default_growth = 0.1
@@ -101,6 +101,9 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
         comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in organisms]
         community = Community(comm_id, comm_models, copy_models=False)
 
+        if target is not None and target not in community.merged_model.reactions:
+            raise RuntimeError(f'Invalid target reaction: {target}')
+
         for medium in media:
 
             if medium is None:
@@ -111,20 +114,20 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
                 env = Environment.from_compounds(media_db[medium]).apply(community.merged_model, inplace=False, exclusive=True, warning=False)
 
             if sample is None:
-                sol = SteadierCom(community, abundance=abundance, growth=growth, allocation=True, constraints=env)
+                sol = SteadierCom(community, abundance=abundance, growth=growth, allocation=True, constraints=env, w_e=w_e, w_r=w_r, objective=target)
                 if sol.status == Status.OPTIMAL:
                     df = sol.cross_feeding(as_df=True).fillna('environment')
                     df['community'] = comm_id
                     df['medium'] = medium
                     results.append(df)
             else:
-                sols = SteadierSample(community, n=sample, abundance=abundance, growth=growth, allocation=True, constraints=env)
+                sols = SteadierSample(community, n=sample, abundance=abundance, growth=growth, allocation=True, constraints=env, w_e=w_e, w_r=w_r, objective=target)
                 feasible = [sol.cross_feeding(as_df=True).fillna('environment') for sol in sols if sol.status == Status.OPTIMAL]
                 if len(feasible) > 0:
                     df = pd.concat(feasible)
                     df['frequency'] = 1
                     df = df.groupby(['donor', 'receiver', 'compound'], as_index=False).agg(
-                        {'mass_rate': lambda x: x.mean(), 'rate': lambda x: x.mean(), 'frequency': lambda x: sum(x)/sample})
+                        {'mass_rate': lambda x: x.mean(), 'rate': lambda x: x.mean(), 'frequency': lambda x: sum(x)/len(feasible)})
                     df['community'] = comm_id
                     df['medium'] = medium
                     results.append(df)
@@ -135,7 +138,7 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
         output_file = f'{output}.tsv'
 
     if len(results) > 0:
-        df_all = pd.concat(results).query(f'rate > {abstol}')
+        df_all = pd.concat(results).query(f'rate > {abstol}').sort_values('mass_rate', ascending=False)
         df_all.to_csv(output_file, sep='\t', index=False)
     else:
         print('No feasible solutions found.')
@@ -187,6 +190,9 @@ def main():
     parser.add_argument('--mediadb', help="Media database file")
     parser.add_argument('--growth', type=float, help="Community growth rate (optional)")
     parser.add_argument('--sample', type=int, help="Run sampling analysis for each simulation with N samples")
+    parser.add_argument('--we', type=float, default=0.002, help="Weighting factor for enzyme sector (default: 0.002 gDW.h/mmol)")
+    parser.add_argument('--wr', type=float, default=0.2, help="Weighting factor for ribosome sector (default: 0.2 h)")
+    parser.add_argument('--target', help="Target reaction to maximize (optional)")
 
     args = parser.parse_args()
 
@@ -199,6 +205,9 @@ def main():
         mediadb=args.mediadb,
         growth=args.growth,
         sample=args.sample,
+        w_e = args.we,
+        w_r = args.wr,
+        target = args.target,
     )
 
 
