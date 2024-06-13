@@ -255,7 +255,9 @@ def allocation_constraints(community, solver, w_e=0.001, w_r=0.5, abundance=None
 
 
 def fit_abundance(community, abundance, growth=0.1, constraints=None, allocation=False,
-             w_e=0.001, w_r=0.5, solver=None):
+             w_e=0.002, w_r=0.2, solver=None):
+    
+    #TODO: this is not really being used at the moment
 
     if not solver:
         solver = build_problem(community, growth=growth)
