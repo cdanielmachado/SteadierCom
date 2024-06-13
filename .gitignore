@@ -2,3 +2,6 @@ dist/*
 build/*
 src/*
 .vscode/launch.json
+tests/.DS_Store
+tests/__pycache__/*.pyc
+.DS_Store

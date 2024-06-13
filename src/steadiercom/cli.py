@@ -38,7 +38,7 @@ def load_communities(models, communities):
         models = glob.glob(pattern)
         if len(models) == 0:
             raise RuntimeError(f'No files found: {pattern}')
-
+        
     model_cache = build_cache(models)
 
     has_abundance = False
@@ -140,6 +140,7 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
     if len(results) > 0:
         df_all = pd.concat(results).query(f'rate > {abstol}').sort_values('mass_rate', ascending=False)
         df_all.to_csv(output_file, sep='\t', index=False)
+        return df_all
     else:
         print('No feasible solutions found.')
 
@@ -182,8 +183,6 @@ def main():
 
         """
     ))
-
-    #TODO: make media optional
 
     parser.add_argument('-o', '--output', dest='output', help="Prefix for output file(s)")
     parser.add_argument('-m', '--media', dest='media', help="Specify a growth medium")
