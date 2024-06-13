@@ -145,11 +145,8 @@ def SteadierCom(community, objective=None, growth=0.1, abundance=None, allocatio
 
     sol = solver.solve(objective, minimize=minimize, constraints=constraints)
 
-    print(objective)
-    print(sol)
-
     if sol.status == Status.OPTIMAL:
-        if True or sol.values[community.merged_model.biomass_reaction] > 0:
+        if sol.values[community.merged_model.biomass_reaction] > 0:
             sol = CommunitySolution(community, sol.values)
             sol.status = Status.OPTIMAL
         else:

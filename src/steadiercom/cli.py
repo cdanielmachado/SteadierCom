@@ -10,7 +10,7 @@ import glob
 import pandas as pd
 from reframed.io.cache import ModelCache
 import os
-from reframed import Environment
+from reframed import Environment, set_default_solver
 
 
 def extract_id_from_filepath(filepath):
@@ -185,17 +185,20 @@ def main():
 
     #TODO: make media optional
 
-    parser.add_argument('-o', '--output', dest='output', help="Prefix for output file(s).")
-    parser.add_argument('-m', '--media', dest='media', help="Specify a growth medium.")
+    parser.add_argument('-o', '--output', dest='output', help="Prefix for output file(s)")
+    parser.add_argument('-m', '--media', dest='media', help="Specify a growth medium")
     parser.add_argument('--mediadb', help="Media database file")
     parser.add_argument('--growth', type=float, help="Community growth rate (optional)")
     parser.add_argument('--sample', type=int, help="Run sampling analysis for each simulation with N samples")
     parser.add_argument('--we', type=float, default=0.002, help="Weighting factor for enzyme sector (default: 0.002 gDW.h/mmol)")
     parser.add_argument('--wr', type=float, default=0.2, help="Weighting factor for ribosome sector (default: 0.2 h)")
     parser.add_argument('--target', help="Target reaction to maximize (optional)")
+    parser.add_argument('--solver', help="Select LP solver (options: gurobi, cplex, scip)")
 
     args = parser.parse_args()
 
+    if args.solver is not None:
+        set_default_solver(args.solver)
 
     main_run(
         models=args.models,
