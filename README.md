@@ -1,8 +1,10 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![PyPI version](https://badge.fury.io/py/steadiercom.svg)](https://badge.fury.io/py/steadiercom)
 
+![SteadierCom](steadiercom.png)
+
 # SteadierCom
-Microbial community simulation
+Microbial community simulation using genome-scale metabolic models
 
 
 ## Instalation
@@ -85,5 +87,5 @@ steadiercom [models] [args] -o myfile
 ______ 
 ## Credits
 
-Daniel Machado (2024)
+Daniel Machado, NTNU (2024)
 
