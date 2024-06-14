@@ -11,6 +11,7 @@ import pandas as pd
 from reframed.io.cache import ModelCache
 import os
 from reframed import Environment, set_default_solver
+from math import inf
 
 
 def extract_id_from_filepath(filepath):
@@ -59,13 +60,21 @@ def load_communities(models, communities):
     return model_cache, comm_dict, has_abundance
 
 
-def load_media_db(filename, sep='\t', medium_col='medium', compound_col='compound'):
+def load_media_db(filename):
     """ Load media library file. """
 
-    data = pd.read_csv(filename, sep=sep)
-    media_db = data[[medium_col, compound_col]].groupby(medium_col).agg(lambda x: list(x))
+    data = pd.read_csv(filename, sep='\t')
 
-    return media_db[compound_col].to_dict()
+    has_bounds = 'bound' in data.columns
+
+    media_db = {}
+    for medium, data_i in data.groupby('medium'):
+        if has_bounds:
+            media_db[medium] = dict(data_i[['compound', 'bound']].values)
+        else:
+            media_db[medium] = list(data_i['compound'])
+
+    return media_db, has_bounds
 
 
 def main_run(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None, 
@@ -84,7 +93,7 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
         if mediadb is None:
             raise RuntimeError('Media database file must be provided.')
         else:   
-            media_db = load_media_db(mediadb)
+            media_db, media_has_bounds = load_media_db(mediadb)
 
     if unlimited:
         tmp = pd.read_csv(unlimited, header=None)
@@ -118,6 +127,12 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
             else:
                 print(f'simulating {comm_id} in {medium}')
                 env = Environment.from_compounds(media_db[medium]).apply(community.merged_model, inplace=False, exclusive=True, warning=False)
+
+                if media_has_bounds:
+                    for cpd, bound in media_db[medium].items():
+                        r_id = f'R_EX_{cpd}_e'
+                        if r_id in env:
+                            env[r_id] = (-bound, inf)
 
             if unlimited is not None:
                 env.update(Environment.from_compounds(unlimited, max_uptake=1000).apply(community.merged_model, inplace=False, exclusive=False, warning=False))
