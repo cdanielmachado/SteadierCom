@@ -68,7 +68,8 @@ def load_media_db(filename, sep='\t', medium_col='medium', compound_col='compoun
     return media_db[compound_col].to_dict()
 
 
-def main_run(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None, w_e=None, w_r=None, target=None):
+def main_run(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None, 
+             w_e=None, w_r=None, target=None, unlimited=None):
 
     abstol = 1e-9
     default_growth = 0.1
@@ -84,6 +85,11 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
             raise RuntimeError('Media database file must be provided.')
         else:   
             media_db = load_media_db(mediadb)
+
+    if unlimited:
+        tmp = pd.read_csv(unlimited, header=None)
+        unlimited = set(tmp[0])
+        unlimited_ids = {f'M_{x}_e' for x in unlimited}
 
     results = []
     
@@ -113,6 +119,9 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
                 print(f'simulating {comm_id} in {medium}')
                 env = Environment.from_compounds(media_db[medium]).apply(community.merged_model, inplace=False, exclusive=True, warning=False)
 
+            if unlimited is not None:
+                env.update(Environment.from_compounds(unlimited, max_uptake=1000).apply(community.merged_model, inplace=False, exclusive=False, warning=False))
+                
             if sample is None:
                 sol = SteadierCom(community, abundance=abundance, growth=growth, allocation=True, constraints=env, w_e=w_e, w_r=w_r, objective=target)
                 if sol.status == Status.OPTIMAL:
@@ -139,6 +148,10 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
 
     if len(results) > 0:
         df_all = pd.concat(results).query(f'rate > {abstol}').sort_values('mass_rate', ascending=False)
+
+        if unlimited is not None:
+            df_all = df_all[~df_all['compound'].isin(unlimited_ids)]
+
         df_all.to_csv(output_file, sep='\t', index=False)
         return df_all
     else:
@@ -193,6 +206,7 @@ def main():
     parser.add_argument('--wr', type=float, default=0.2, help="Weighting factor for ribosome sector (default: 0.2 h)")
     parser.add_argument('--target', help="Target reaction to maximize (optional)")
     parser.add_argument('--solver', help="Select LP solver (options: gurobi, cplex, scip)")
+    parser.add_argument('--unlimited', help="Compounds to be considered in excess supply (excluded from cross-feeding analysis).")
 
     args = parser.parse_args()
 
@@ -210,6 +224,7 @@ def main():
         w_e = args.we,
         w_r = args.wr,
         target = args.target,
+        unlimited=args.unlimited,
     )
 
 

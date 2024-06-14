@@ -120,7 +120,6 @@ def SteadierCom(community, objective=None, growth=0.1, abundance=None, allocatio
 
     if not solver:
         solver = build_problem(community, growth=growth, abundance=abundance, constraints=constraints)
-        print(solver)
 
     if allocation:
         allocation_constraints(community, solver, w_e=w_e, w_r=w_r, abundance=abundance)
