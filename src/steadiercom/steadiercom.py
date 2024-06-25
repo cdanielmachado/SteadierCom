@@ -203,7 +203,7 @@ def SteadierSample(community, objective=None, n=100, growth=0.1, abundance=None,
     return sols
 
 
-def allocation_constraints(community, solver, w_e=0.001, w_r=0.5, abundance=None):
+def allocation_constraints(community, solver, w_e=0.002, w_r=0.2, abundance=None):
     enz_vars = {}
     split_vars = {}
 
@@ -217,17 +217,15 @@ def allocation_constraints(community, solver, w_e=0.001, w_r=0.5, abundance=None
 
             new_id = community.reaction_map[(org_id, r_id)]
 
-            # test if reaction is enzymatic
-            if reaction.gpr is not None and len(reaction.get_genes()) > 0:
-                if reaction.reversible:
-                    pos, neg = new_id + '+', new_id + '-'
-                    solver.add_variable(pos, 0, inf, update=False)
-                    solver.add_variable(neg, 0, inf, update=False)
-                    enz_vars[org_id].append(pos)
-                    enz_vars[org_id].append(neg)
-                    split_vars[org_id][new_id] = (pos, neg)
-                else:
-                    enz_vars[org_id].append(new_id)
+            if reaction.reversible:
+                pos, neg = new_id + '+', new_id + '-'
+                solver.add_variable(pos, 0, inf, update=False)
+                solver.add_variable(neg, 0, inf, update=False)
+                enz_vars[org_id].append(pos)
+                enz_vars[org_id].append(neg)
+                split_vars[org_id][new_id] = (pos, neg)
+            else:
+                enz_vars[org_id].append(new_id)
 
     solver.update()
 
