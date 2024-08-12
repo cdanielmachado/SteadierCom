@@ -18,27 +18,27 @@ def build_problem(community, growth=0.1, abundance=None, constraints=None):
 
     if abundance is None:  # create abundance variables
         for org_id in community.organisms:
-            solver.add_variable(f"x_{org_id}", 0, 1, update=False)
+            solver.add_variable(f"x_{org_id}", 0, 1)
 
     # add all community model reactions
     for r_id, reaction in model.reactions.items():
         if reaction.reaction_type == ReactionType.EXCHANGE:
-            solver.add_variable(r_id, reaction.lb, reaction.ub, update=False)
+            solver.add_variable(r_id, reaction.lb, reaction.ub)
         else:
             lb = -inf if reaction.lb < 0 else 0
             ub = inf if reaction.ub > 0 else 0
-            solver.add_variable(r_id, lb, ub, update=False)
+            solver.add_variable(r_id, lb, ub)
 
     solver.update()
 
     # sum biomass = 1
     if abundance is None:
-        solver.add_constraint("abundance", {f"x_{org_id}": 1 for org_id in community.organisms}, rhs=1, update=False)
+        solver.add_constraint("abundance", {f"x_{org_id}": 1 for org_id in community.organisms}, rhs=1)
 
     # S.v = 0
     table = model.metabolite_reaction_lookup()
     for m_id in model.metabolites:
-        solver.add_constraint(m_id, table[m_id], update=False)
+        solver.add_constraint(m_id, table[m_id])
 
     mu = model.biomass_reaction
 
@@ -55,11 +55,11 @@ def build_problem(community, growth=0.1, abundance=None, constraints=None):
             if r_id == organism.biomass_reaction:
 
                 if growth is None: # growth is variable, abundance is fixed
-                    solver.add_constraint(f"g_{org_id}", {mu: abundance[org_id], new_id: -1}, update=False)
+                    solver.add_constraint(f"g_{org_id}", {mu: abundance[org_id], new_id: -1})
                 elif abundance is None: # growth is fixed, abundance is variable
-                    solver.add_constraint(f"g_{org_id}", {f"x_{org_id}": growth, new_id: -1}, update=False)
+                    solver.add_constraint(f"g_{org_id}", {f"x_{org_id}": growth, new_id: -1})
                 else: # growth and abundance are fixed
-                    solver.add_constraint(f"g_{org_id}", {new_id: 1}, '=', growth * abundance[org_id], update=False)
+                    solver.add_constraint(f"g_{org_id}", {new_id: 1}, '=', growth * abundance[org_id])
 
             # lb * X < R < ub * X
             else:
@@ -69,15 +69,15 @@ def build_problem(community, growth=0.1, abundance=None, constraints=None):
                 if lb != 0:
 
                     if abundance is None:
-                        solver.add_constraint(f"lb_{new_id}", {f"x_{org_id}": lb, new_id: -1}, '<', 0, update=False)
+                        solver.add_constraint(f"lb_{new_id}", {f"x_{org_id}": lb, new_id: -1}, '<', 0)
                     else:
-                        solver.add_constraint(f"lb_{new_id}", {new_id: 1}, '>', lb * abundance[org_id], update=False)
+                        solver.add_constraint(f"lb_{new_id}", {new_id: 1}, '>', lb * abundance[org_id])
 
                 if ub != 0:
                     if abundance is None:
-                        solver.add_constraint(f"ub_{new_id}", {f"x_{org_id}": ub, new_id: -1}, '>', 0, update=False)
+                        solver.add_constraint(f"ub_{new_id}", {f"x_{org_id}": ub, new_id: -1}, '>', 0)
                     else:
-                        solver.add_constraint(f"ub_{new_id}", {new_id: 1}, '<', ub * abundance[org_id], update=False)
+                        solver.add_constraint(f"ub_{new_id}", {new_id: 1}, '<', ub * abundance[org_id])
 
     solver.update()
 
@@ -96,14 +96,14 @@ def build_problem(community, growth=0.1, abundance=None, constraints=None):
             if uptake_in_model or uptake_override:
                 m_id = model.reactions[r_id].get_substrates()[0]
                 new_id = f'uptake_{m_id}'
-                solver.add_variable(new_id, 0, inf, update=False)
+                solver.add_variable(new_id, 0, inf)
                 solver.uptake_vars[m_id] = (r_id, new_id)
 
         solver.update()
 
 
         for r_id, new_id in solver.uptake_vars.values():
-            solver.add_constraint(f"min_{r_id}", {r_id: 1, new_id: 1}, '>', 0, update=False)
+            solver.add_constraint(f"min_{r_id}", {r_id: 1, new_id: 1}, '>', 0)
 
         solver.update()
 
@@ -219,8 +219,8 @@ def allocation_constraints(community, solver, w_e=0.002, w_r=0.2, abundance=None
 
             if reaction.reversible:
                 pos, neg = new_id + '+', new_id + '-'
-                solver.add_variable(pos, 0, inf, update=False)
-                solver.add_variable(neg, 0, inf, update=False)
+                solver.add_variable(pos, 0, inf)
+                solver.add_variable(neg, 0, inf)
                 enz_vars[org_id].append(pos)
                 enz_vars[org_id].append(neg)
                 split_vars[org_id][new_id] = (pos, neg)
@@ -233,18 +233,18 @@ def allocation_constraints(community, solver, w_e=0.002, w_r=0.2, abundance=None
 
         # constrain absolute values
         for r_id, (pos, neg) in split_vars[org_id].items():
-            solver.add_constraint('c' + pos, {r_id: -1, pos: 1}, '>', 0, update=False)
-            solver.add_constraint('c' + neg, {r_id: 1, neg: 1}, '>', 0, update=False)
+            solver.add_constraint('c' + pos, {r_id: -1, pos: 1}, '>', 0)
+            solver.add_constraint('c' + neg, {r_id: 1, neg: 1}, '>', 0)
 
         # protein allocation constraints
         alloc_constr = {r_id: w_e for r_id in enz_vars[org_id]}
         org_growth = community.reaction_map[(org_id, organism.biomass_reaction)]
         alloc_constr[org_growth] = w_r
         if abundance:
-            solver.add_constraint(f"prot_{org_id}", alloc_constr, '<', abundance[org_id], update=False)
+            solver.add_constraint(f"prot_{org_id}", alloc_constr, '<', abundance[org_id])
         else:
             alloc_constr[f"x_{org_id}"] = -1
-            solver.add_constraint(f"prot_{org_id}", alloc_constr, '<', 0, update=False)
+            solver.add_constraint(f"prot_{org_id}", alloc_constr, '<', 0)
 
     solver.update()
 
@@ -266,8 +266,8 @@ def fit_abundance(community, abundance, growth=0.1, constraints=None, allocation
 
     for org_id in community.organisms:
         d_pos, d_neg = f"d_{org_id}_+", f"d_{org_id}_-"
-        solver.add_variable(d_pos, 0, 1, update=False)
-        solver.add_variable(d_neg, 0, 1, update=False)
+        solver.add_variable(d_pos, 0, 1)
+        solver.add_variable(d_neg, 0, 1)
         abd_vars.extend([d_pos, d_neg])
 
     solver.update()
@@ -276,8 +276,8 @@ def fit_abundance(community, abundance, growth=0.1, constraints=None, allocation
     for org_id in community.organisms:
         value = abundance.get(org_id, 0) / norm
         d_pos, d_neg = f"d_{org_id}_+", f"d_{org_id}_-"
-        solver.add_constraint('c' + d_pos, {f"x_{org_id}": -1, d_pos: 1}, '>', -value, update=False)
-        solver.add_constraint('c' + d_neg, {f"x_{org_id}": 1, d_neg: 1}, '>', value, update=False)
+        solver.add_constraint('c' + d_pos, {f"x_{org_id}": -1, d_pos: 1}, '>', -value)
+        solver.add_constraint('c' + d_neg, {f"x_{org_id}": 1, d_neg: 1}, '>', value)
 
     solver.update()
 

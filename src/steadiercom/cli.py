@@ -122,10 +122,9 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
         for medium in media:
 
             if medium is None:
-                print(f'simulating {comm_id} in complete medium')
+                medium = 'complete'
                 env = Environment.complete(community.merged_model, inplace=False)
             else:
-                print(f'simulating {comm_id} in {medium}')
                 env = Environment.from_compounds(media_db[medium]).apply(community.merged_model, inplace=False, exclusive=True, warning=False)
 
                 if media_has_bounds:
@@ -133,6 +132,8 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
                         r_id = f'R_EX_{cpd}_e'
                         if r_id in env:
                             env[r_id] = (-bound, inf)
+
+            print(f'simulating {comm_id} in {medium} medium')
 
             if unlimited is not None:
                 env.update(Environment.from_compounds(unlimited, max_uptake=1000).apply(community.merged_model, inplace=False, exclusive=False, warning=False))
@@ -162,7 +163,7 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
         output_file = f'{output}.tsv'
 
     if len(results) > 0:
-        df_all = pd.concat(results).query(f'rate > {abstol}').sort_values('mass_rate', ascending=False)
+        df_all = pd.concat(results).query(f'rate > {abstol}').sort_values(['community', 'medium', 'mass_rate'], ascending=False)
 
         if unlimited is not None:
             df_all = df_all[~df_all['compound'].isin(unlimited_ids)]

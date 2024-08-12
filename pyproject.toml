@@ -27,7 +27,7 @@ classifiers = [
 ]
 license = {text = "Apache Software License 2.0"}
 dependencies = [
-  "reframed>=1.5.2",
+  "reframed>=1.5.3",
   "pandas",
   "numpy"
 ]
