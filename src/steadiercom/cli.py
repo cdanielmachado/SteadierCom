@@ -215,7 +215,36 @@ def main():
 
     parser.add_argument('-o', '--output', dest='output', help="Prefix for output file(s)")
     parser.add_argument('-m', '--media', dest='media', help="Specify a growth medium")
-    parser.add_argument('--mediadb', help="Media database file")
+    parser.add_argument('--mediadb', textwrap.dedent(
+        """
+        Media database (TSV file).
+        
+        Two columns are mandatory, 'medium' and 'compound' (but other columns can be present).
+        Each compound will have the maximum uptake rate defined by the -u argument.
+        
+        Example:
+
+        medium\tcompound\tnotes
+        M1\tglc__D\tmain carbon source
+        M1\to2\tadded for aerobic growth
+        M1\tnh4\tnitrogen source
+        M2\tglyc\tcarbon source for medium 2
+        M2\tnh4\tnitrogen source
+
+        Alternatively, individual flux bounds can be specified for each compound in a new column
+        called 'bound'. Column order is not important.
+
+        Example:
+
+        medium\tcompound\tbound
+        M1\tglc__D\t10
+        M1\to2\t20
+        M1\tnh4\t1000
+        M2\tglyc\t10
+        M2\tnh4\t1000
+
+        """
+        ))
     parser.add_argument('--growth', type=float, help="Community growth rate (optional)")
     parser.add_argument('--sample', type=int, help="Run sampling analysis for each simulation with N samples")
     parser.add_argument('--we', type=float, default=0.002, help="Weighting factor for enzyme sector (default: 0.002 gDW.h/mmol)")
