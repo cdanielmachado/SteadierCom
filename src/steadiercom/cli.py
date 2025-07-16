@@ -2,172 +2,170 @@
 
 import argparse
 import textwrap
-from reframed.community.model import Community
-from .steadiercom import SteadierCom, SteadierSample
-from reframed.solvers.solution import Status
-
 import glob
-import pandas as pd
-from reframed.io.cache import ModelCache
 import os
-from reframed import Environment, set_default_solver
 from math import inf
+
+import pandas as pd
+from reframed.community.model import Community
+from steadiercom import SteadierCom, SteadierSample
+from reframed.solvers.solution import Status
+from reframed.io.cache import ModelCache
+from reframed import Environment, set_default_solver
 
 
 def extract_id_from_filepath(filepath):
     filename = os.path.basename(filepath)
-
     if filename.endswith('.xml'):
-        organism_id = filename[:-4]
+        return filename[:-4]
     elif filename.endswith('.xml.gz'):
-        organism_id = filename[:-7]
+        return filename[:-7]
     else:
         raise IOError(f'Unrecognized extension in file {filename}. Valid extensions are .xml and .xml.gz')
-
-    return organism_id
 
 
 def build_cache(models):
     ids = [extract_id_from_filepath(model) for model in models]
-
     return ModelCache(ids, models, load_args={'flavor': 'bigg'})
 
 
 def load_communities(models, communities):
     if len(models) == 1 and '*' in models[0]:
-        pattern = models[0]
-        models = glob.glob(pattern)
-        if len(models) == 0:
-            raise RuntimeError(f'No files found: {pattern}')
-        
+        models = glob.glob(models[0])
+        if not models:
+            raise RuntimeError(f'No files found: {models[0]}')
     model_cache = build_cache(models)
 
-    has_abundance = False
-
     if communities is None:
-        comm_dict = {'all': model_cache.get_ids()}
+        return model_cache, {'all': model_cache.get_ids()}, False
+
+    df = pd.read_csv(communities, sep='\t', header=None)
+    if len(df.columns) == 2:
+        comm_dict = {name: group[1].tolist() for name, group in df.groupby(0)}
+        return model_cache, comm_dict, False
+    elif len(df.columns) == 3:
+        comm_dict = {name: dict(group[[1, 2]].values) for name, group in df.groupby(0)}
+        return model_cache, comm_dict, True
     else:
-        df = pd.read_csv(communities, sep='\t', header=None)
-
-        if len(df.columns) == 2:
-            comm_dict = {name: group[1].tolist() for name, group in df.groupby(0)}
-        elif len(df.columns) == 3:
-            comm_dict = {name: dict(group[[1,2]].values) for name, group in df.groupby(0)}
-            has_abundance = True
-        else:
-            raise IOError(f'Unexpected number of columns in {communities}')
-
-    return model_cache, comm_dict, has_abundance
+        raise IOError(f'Unexpected number of columns in {communities}')
 
 
 def load_media_db(filename):
-    """ Load media library file. """
-
     data = pd.read_csv(filename, sep='\t')
-
     has_bounds = 'bound' in data.columns
-
     media_db = {}
     for medium, data_i in data.groupby('medium'):
         if has_bounds:
             media_db[medium] = dict(data_i[['compound', 'bound']].values)
         else:
             media_db[medium] = list(data_i['compound'])
-
     return media_db, has_bounds
 
 
-def main_run(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None, 
-             w_e=None, w_r=None, target=None, unlimited=None):
+def get_fmt_func(model_format):
+    if model_format == 'gapseq':
+        return lambda x: f"R_EX_{x}_e0"
+    elif model_format == 'bigg':
+        return lambda x: f"R_EX_{x}_e"
+    else:
+        raise ValueError(f"Unsupported model format: {model_format}")
+
+
+def main_run(models, communities=None, output=None, media=None, mediadb=None, growth=None, sample=None,
+             w_e=None, w_r=None, target=None, unlimited=None, model_format='bigg'):
 
     abstol = 1e-9
     default_growth = 0.1
+    fmt_func = get_fmt_func(model_format)
 
     model_cache, comm_dict, has_abundance = load_communities(models, communities)
 
-    if media is None:
-        media = [None]
-    else:
-        media = media.split(',')
+    media = media.split(',') if media else [None]
+    if any(media) and not mediadb:
+        raise RuntimeError('Media database file must be provided.')
+    media_db, media_has_bounds = load_media_db(mediadb) if mediadb else ({}, False)
 
-        if mediadb is None:
-            raise RuntimeError('Media database file must be provided.')
-        else:   
-            media_db, media_has_bounds = load_media_db(mediadb)
-
+    unlimited_ids = set()
     if unlimited:
         tmp = pd.read_csv(unlimited, header=None)
         unlimited = set(tmp[0])
-        unlimited_ids = {f'M_{x}_e' for x in unlimited}
+        suffix = '_e0' if model_format == 'gapseq' else '_e'
+        unlimited_ids = {f'M_{x}{suffix}' for x in unlimited}
 
-    results = []
-    
     if not has_abundance and growth is None:
         growth = default_growth
 
+    results = []
+
     for comm_id, organisms in comm_dict.items():
-
-        if has_abundance:
-            abundance = organisms
-            organisms = organisms.keys()
-        else:
-            abundance = None
-
-        comm_models = [model_cache.get_model(org_id, reset_id=True) for org_id in organisms]
+        abundance = organisms if has_abundance else None
+        org_ids = organisms if not has_abundance else organisms.keys()
+        comm_models = [model_cache.get_model(org_id, reset_id=False) for org_id in org_ids]
         community = Community(comm_id, comm_models, copy_models=False)
 
-        if target is not None and target not in community.merged_model.reactions:
+        # --- Save merged community model for inspection ---
+        from reframed.io.sbml import save_model
+        output_path = f"{comm_id}_merged_model.xml"
+        save_model(community.merged_model, output_path)
+        print(f"Saved merged model: {output_path}")
+
+        if model_format == 'gapseq':
+            for org_id, org in community.organisms.items():
+                org.biomass_reaction = 'R_bio1'
+
+        if target and target not in community.merged_model.reactions:
             raise RuntimeError(f'Invalid target reaction: {target}')
 
         for medium in media:
-
             if medium is None:
                 medium = 'complete'
                 env = Environment.complete(community.merged_model, inplace=False)
             else:
-                env = Environment.from_compounds(media_db[medium]).apply(community.merged_model, inplace=False, exclusive=True, warning=False)
-
+                env = Environment.from_compounds(media_db[medium]).apply(
+                    community.merged_model, inplace=False, exclusive=True, warning=False
+                )
                 if media_has_bounds:
                     for cpd, bound in media_db[medium].items():
-                        r_id = f'R_EX_{cpd}_e'
+                        r_id = f'R_EX_{cpd}_e0' if model_format == 'gapseq' else f'R_EX_{cpd}_e'
                         if r_id in env:
                             env[r_id] = (-bound, inf)
 
-            print(f'simulating {comm_id} in {medium} medium')
+            print(f'Simulating {comm_id} in {medium} medium')
 
-            if unlimited is not None:
-                env.update(Environment.from_compounds(unlimited, max_uptake=1000).apply(community.merged_model, inplace=False, exclusive=False, warning=False))
-                
+            if unlimited:
+                env.update(Environment.from_compounds(unlimited, fmt_func=fmt_func, max_uptake=1000).apply(
+                    community.merged_model, inplace=False, exclusive=False, warning=False
+                ))
+
             if sample is None:
-                sol = SteadierCom(community, abundance=abundance, growth=growth, allocation=True, constraints=env, w_e=w_e, w_r=w_r, objective=target)
+                sol = SteadierCom(community, abundance=abundance, growth=growth, allocation=True,
+                                  constraints=env, w_e=w_e, w_r=w_r, objective=target)
                 if sol.status == Status.OPTIMAL:
                     df = sol.cross_feeding(as_df=True).fillna('environment')
                     df['community'] = comm_id
                     df['medium'] = medium
                     results.append(df)
             else:
-                sols = SteadierSample(community, n=sample, abundance=abundance, growth=growth, allocation=True, constraints=env, w_e=w_e, w_r=w_r, objective=target)
+                sols = SteadierSample(community, n=sample, abundance=abundance, growth=growth, allocation=True,
+                                      constraints=env, w_e=w_e, w_r=w_r, objective=target)
                 feasible = [sol.cross_feeding(as_df=True).fillna('environment') for sol in sols if sol.status == Status.OPTIMAL]
-                if len(feasible) > 0:
+                if feasible:
                     df = pd.concat(feasible)
                     df['frequency'] = 1
-                    df = df.groupby(['donor', 'receiver', 'compound'], as_index=False).agg(
-                        {'mass_rate': lambda x: x.mean(), 'rate': lambda x: x.mean(), 'frequency': lambda x: sum(x)/len(feasible)})
+                    df = df.groupby(['donor', 'receiver', 'compound'], as_index=False).agg({
+                        'mass_rate': 'mean',
+                        'rate': 'mean',
+                        'frequency': lambda x: sum(x) / len(feasible)
+                    })
                     df['community'] = comm_id
                     df['medium'] = medium
                     results.append(df)
 
-    if not output:
-        output_file = 'output.tsv'
-    else:
-        output_file = f'{output}.tsv'
-
-    if len(results) > 0:
+    if results:
         df_all = pd.concat(results).query(f'rate > {abstol}').sort_values(['community', 'medium', 'mass_rate'], ascending=False)
-
-        if unlimited is not None:
+        if unlimited_ids:
             df_all = df_all[~df_all['compound'].isin(unlimited_ids)]
-
+        output_file = f'{output}.tsv' if output else 'output.tsv'
         df_all.to_csv(output_file, sep='\t', index=False)
         return df_all
     else:
@@ -175,87 +173,35 @@ def main_run(models, communities=None, output=None, media=None, mediadb=None, gr
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description='Run SteadierCom with BiGG or Gapseq models',
+        formatter_class=argparse.RawTextHelpFormatter
+    )
 
-    parser = argparse.ArgumentParser(description="Simulate microbial communities with SteadierCom",
-                                     formatter_class=argparse.RawTextHelpFormatter)
-
+    parser.add_argument('--format', choices=['gapseq', 'bigg'], default='bigg',
+                        help='Specify the model format (e.g., gapseq, bigg)')
     parser.add_argument('models', metavar='MODELS', nargs='+',
-                        help=textwrap.dedent(
-        """
-        Multiple single-species models (one or more files).
-        
-        You can use wild-cards, for example: models/*.xml, and optionally protect with quotes to avoid automatic bash
-        expansion (this will be faster for long lists): "models/*.xml". 
-        """
-        ))
-
-    parser.add_argument('-c', '--communities', metavar='COMMUNITIES.TSV', dest='communities',
-                        help=textwrap.dedent(
-        """
-        Run SteadierCom for multiple (sub)communities.
-        The communities must be specified in a tab-separated file with community and organism identifiers.
-        The organism identifiers should match the file names in the SBML files (without extension).
-        
-        Example:
-            community1\torganism1
-            community1\torganism2
-            community2\torganism1
-            community2\torganism3
-
-        You can optionally specify the relative abundances for each community member:
-        
-        Example:
-            community1\torganism1\t0.5
-            community1\torganism2\t0.5
-            community2\torganism1\t0.9
-            community2\torganism3\t0.1
-
-        """
-    ))
-
+                        help="Multiple single-species models (use wildcards like models/*.xml)")
+    parser.add_argument('-c', '--communities', metavar='COMMUNITIES.TSV', dest='communities', help="Community definition file")
     parser.add_argument('-o', '--output', dest='output', help="Prefix for output file(s)")
     parser.add_argument('-m', '--media', dest='media', help="Specify a growth medium")
-    parser.add_argument('--mediadb', textwrap.dedent(
-        """
-        Media database (TSV file).
-        
-        Two columns are mandatory, 'medium' and 'compound' (but other columns can be present).
-        Each compound will have the maximum uptake rate defined by the -u argument.
-        
-        Example:
-
-        medium\tcompound\tnotes
-        M1\tglc__D\tmain carbon source
-        M1\to2\tadded for aerobic growth
-        M1\tnh4\tnitrogen source
-        M2\tglyc\tcarbon source for medium 2
-        M2\tnh4\tnitrogen source
-
-        Alternatively, individual flux bounds can be specified for each compound in a new column
-        called 'bound'. Column order is not important.
-
-        Example:
-
-        medium\tcompound\tbound
-        M1\tglc__D\t10
-        M1\to2\t20
-        M1\tnh4\t1000
-        M2\tglyc\t10
-        M2\tnh4\t1000
-
-        """
-        ))
+    parser.add_argument('--mediadb', help="Media database (TSV file)")
     parser.add_argument('--growth', type=float, help="Community growth rate (optional)")
     parser.add_argument('--sample', type=int, help="Run sampling analysis for each simulation with N samples")
-    parser.add_argument('--we', type=float, default=0.002, help="Weighting factor for enzyme sector (default: 0.002 gDW.h/mmol)")
-    parser.add_argument('--wr', type=float, default=0.2, help="Weighting factor for ribosome sector (default: 0.2 h)")
+    parser.add_argument('--we', type=float, default=0.002, help="Weighting factor for enzyme sector")
+    parser.add_argument('--wr', type=float, default=0.2, help="Weighting factor for ribosome sector")
     parser.add_argument('--target', help="Target reaction to maximize (optional)")
     parser.add_argument('--solver', help="Select LP solver (options: gurobi, cplex, scip)")
-    parser.add_argument('--unlimited', help="Compounds to be considered in excess supply (excluded from cross-feeding analysis).")
+    parser.add_argument('--unlimited', help="Compounds to be considered in excess supply")
 
     args = parser.parse_args()
 
-    if args.solver is not None:
+    if args.format == 'gapseq':
+        print("Using Gapseq format for models")
+    else:
+        print("Using BiGG format for models")
+
+    if args.solver:
         set_default_solver(args.solver)
 
     main_run(
@@ -266,12 +212,15 @@ def main():
         mediadb=args.mediadb,
         growth=args.growth,
         sample=args.sample,
-        w_e = args.we,
-        w_r = args.wr,
-        target = args.target,
+        w_e=args.we,
+        w_r=args.wr,
+        target=args.target,
         unlimited=args.unlimited,
+        model_format=args.format
     )
 
 
 if __name__ == '__main__':
     main()
+
+
